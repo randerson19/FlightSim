@@ -118,7 +118,7 @@ class FlightAxis():
                 self._state['m-rollRate-DEGpSEC'] = m_rollRate_DEGpSEC
             elif elem.tag == 'm-yawRate-DEGpSEC':
                 m_yawRate_DEGpSEC = elem.text
-                self._state['"m-yawRate-DEGpSEC'] = m_yawRate_DEGpSEC
+                self._state['m-yawRate-DEGpSEC'] = m_yawRate_DEGpSEC
             elif elem.tag == 'm-azimuth-DEG':
                 m_azimuth_DEG = elem.text
                 self._state['m-azimuth-DEG'] = m_azimuth_DEG
@@ -262,9 +262,9 @@ def constrain(x):
         
 
 class PID():
-    def __init__(self, ct, kp = 0, ki = 0, kd = 0):
+    def __init__(self, cT, kp = 0, ki = 0, kd = 0):
         self.e = 0
-        self.t = ct
+        self.t = cT
         self.cmd = 0
         self.int_e = 0
         self.diff_e = 0
@@ -301,6 +301,7 @@ class PID():
         return str((self.kp, self.ki, self.kd, self.e, self.ep, self.t,\
                     self.tp, self.cmd, self.int_e, self.diff_e))
 
+
 def main():
     fa = FlightAxis()
     fa.disconnect()
@@ -311,46 +312,82 @@ def main():
     # Send the controls so we get our inititial state variables
     fa.setControls(controls)
     cT = float(fa.getStateItem('m-currentPhysicsTime-SEC'))
+    
     throttle_ctrl = PID(cT, .17 , .11, .17) 
     throttle_ctrl.set_command(50)
     
+    roll_val = float(fa.getStateItem('m-roll-DEG'))
+    roll_rate = float(fa.getStateItem('m-rollRate-DEGpSEC'))
+    roll_ctrl = PID(cT, .17 , .11, .17)
+    roll_ctrl.set_command(0)
     
-    t = .75
-    r = .1
-    p = .0
-    y = .0
-    cmd_val = np.array([[t], [r], [p], [y]])
+    pitch_val = float(fa.getStateItem('m-inclination-DEG'))
+    pitch_rate = float(fa.getStateItem('m-pitchRate-DEGpSEC'))
+    pitch_ctrl = PID(cT, .17 , .11, .17)
+    pitch_ctrl.set_command(0)
+    
+    yaw_val = float(fa.getStateItem('m-azimuth-DEG'))
+    yaw_rate = float(fa.getStateItem('m-yawRate-DEGpSEC'))
+    yaw_ctrl = PID(cT, .17 , .11, .17)
+    yaw_ctrl.set_command(90)
+    
+    
+#    t = .75
+#    r = .1
+#    p = .0
+#    y = .0
+#    cmd_val = np.array([[t], [r], [p], [y]])
     mixer = np.array([[1, -1, 1, -1], [1, 1, -1, -1], [1, 1, 1, 1],\
                               [1, -1, -1, 1]])
-    m_vals = np.matmul(mixer, cmd_val)
-    controls[0] = m_vals[0]
-    controls[1] = m_vals[1]
-    controls[2] = m_vals[2]
-    controls[3] = m_vals[3]
-    fa.setControls(controls)
  
 # =============================================================================
-#     file = open("PIDVariables.csv", "w")
-#     timeout = time.time() + 60
-#     
-#     while(True):
-#         if time.time() >= timeout:
-#             print(time.time())
-#             file.close()
-#             break
-#         alt = float(fa.getStateItem('m-altitudeASL-MTR'))
-#         vertical_velocity = -float(fa.getStateItem("m-velocityWorldW-MPS"))
-#         t = float(fa.getStateItem('m-currentPhysicsTime-SEC'))
-#         
-#         throttle_ctrl.update(t, alt, vertical_velocity)
-#         throttle = constrain(throttle_ctrl.get_control())
-#         
+#      file = open("PIDVariables.csv", "w")
+#      timeout = time.time() + 60
+# =============================================================================
+     
+     #while(True):
+# =============================================================================
+#          if time.time() >= timeout:
+#              print(time.time())
+#              file.close()
+#              break
+# =============================================================================
+    while(True):
+         alt = float(fa.getStateItem('m-altitudeASL-MTR'))
+         vertical_velocity = -float(fa.getStateItem("m-velocityWorldW-MPS"))
+         t = float(fa.getStateItem('m-currentPhysicsTime-SEC'))
+         
+         throttle_ctrl.update(t, alt, vertical_velocity)
+         throttle = constrain(throttle_ctrl.get_control())
+         
+         roll_ctrl.update(t, roll_val, roll_rate)
+         roll = constrain(roll_ctrl.get_control())
+         
+         pitch_ctrl.update(t, pitch_val, pitch_rate)
+         pitch = constrain(pitch_ctrl.get_control())
+         
+         yaw_ctrl.update(t, yaw_val, yaw_rate)
+         yaw = constrain(yaw_ctrl.get_control())
+         
+         cmd_val = np.array([[throttle], [roll], [pitch], [yaw]])
+         m_vals = np.matmul(mixer, cmd_val)
+         controls[0] = m_vals[0]
+         controls[1] = m_vals[1]
+         controls[2] = m_vals[2]
+         controls[3] = m_vals[3]
+         fa.setControls(controls)
+         
+         
+         
+         
 #         controls[2] = throttle
 #         fa.setControls(controls)
-#         
-#         PID_vars = re.sub('[(){}<>]', '', throttle_ctrl.getVars())
-#         file.write(PID_vars + '\n')
-#         print('int_e: {:>5.2f}    diff_e: {:>5.2f}     alt: {:>5.2f}'.format(
-#                throttle_ctrl.int_e, throttle_ctrl.diff_e, alt), end='\n')
+         
 # =============================================================================
+#          PID_vars = re.sub('[(){}<>]', '', throttle_ctrl.getVars())
+#          file.write(PID_vars + '\n')
+# =============================================================================
+         print('int_e: {:>5.2f}    diff_e: {:>5.2f}     alt: {:>5.2f}'.format(
+                throttle_ctrl.int_e, throttle_ctrl.diff_e, alt), end='\n')
+
 main()
